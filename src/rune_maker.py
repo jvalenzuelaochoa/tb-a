@@ -18,17 +18,17 @@ parser = argparse.ArgumentParser(description='Rune maker')
 parser.add_argument('--spell',
                     choices=list(MANA_PER_SPELL.keys()),
                     default='ava',
-                    help='Spell type')
+                    help='Spell type {ava}')
 
 parser.add_argument('--food',
                     choices=list(FOOD_TIMERS.keys()),
                     default='d_ham',
-                    help='Food type')
+                    help='Food type {d_ham}')
 
 parser.add_argument('--voc',
                     choices=list(VOC_REGEN.keys()),
                     default='mage',
-                    help='Vocation')
+                    help='Vocation {mage}')
 
 args = parser.parse_args()
 
