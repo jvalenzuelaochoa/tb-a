@@ -30,6 +30,13 @@ parser.add_argument('--voc',
                     default='mage',
                     help='Vocation {mage}')
 
+parser.add_argument('--sb', dest='sb', action='store_true',
+                    help='Specify this flag when using soft boots')
+
+
+parser.add_argument('--sb_timer',  type=int, default=-1,
+                    help='Specify time left on soft boots {minutes}')
+
 args = parser.parse_args()
 
 # TODO: argparse variables
@@ -44,7 +51,10 @@ print(f"{voc} using \'{spell}\' eating {food}")
 RUNE_HOTKEY = Key.f2
 FOOD_HOTKEY = Key.f1
 
-RUNE_DURATION = MANA_PER_SPELL[spell] / VOC_REGEN[voc]
+#TODO: Change assignment to function
+mana_regen = VOC_REGEN[voc] if not args.sb else VOC_REGEN[voc]+4
+
+RUNE_DURATION = MANA_PER_SPELL[spell] / mana_regen
 FOOD_DURATION = FOOD_TIMERS[food]
 
 # Startup time
@@ -55,22 +65,28 @@ def key_event(key):
     time.sleep(.5)
     keyboard.release(key)
 
+runer_struct = {'spell' : {'action' : RUNE_HOTKEY, 'duration' : RUNE_DURATION, 'jitter' : 5},
+                'food' :  {'action' : FOOD_HOTKEY, 'duration' : FOOD_DURATION, 'jitter' : 14}}
 
-runer_struct = [('spell', RUNE_HOTKEY, RUNE_DURATION),('food', FOOD_HOTKEY, FOOD_DURATION)]
-
-counters = [0] * len(runer_struct)
+counters = [0] * len(runer_struct.keys())
+sb_timekeep = 0
 
 while(True):
-    for i, c in enumerate(counters):
-        if c <= 0:
-            key_event(runer_struct[i][1])
+    for i, k in enumerate(runer_struct.keys()):
+        if counters[i] <= 0:
+            key_event(runer_struct[k]['action'])
             # Add variable deadtime to avoid exact patterns
-            counters[i] = runer_struct[i][2] + randint(0, 15)
+            counters[i] = runer_struct[k]['duration'] + randint(0, runer_struct[k]['jitter'])
         # Extra white space to clear carries from larger numbers
-        print(f"{runer_struct[i][0]} counter {counters[i]}      ")
+        print("%s counter %.2f     " % (k, counters[i]))
         counters[i] -= 1
-        
+
     sys.stdout.write("\033[F") # Cursor up one line
     sys.stdout.write("\033[F") # Cursor up one line
     time.sleep(1)
+    if args.sb:
+        sb_timekeep += 1
+        #TODO: Change assignment to function
+        if (args.sb_timer and (sb_timekeep >= args.sb_timer*60)):
+            runer_struct['spell']['duration'] = MANA_PER_SPELL[spell] / VOC_REGEN[voc]
 
