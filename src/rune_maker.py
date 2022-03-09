@@ -13,10 +13,13 @@ keyboard = Controller()
 
 
 # TODO: validate dictionaries
+REST_BONUS = 2
 VOC_REGEN = {'Mage' : 2, 'Paladin' : 4/3, 'Knight': 2/3}
 MANA_PER_SPELL = {'Avalanche/GFB' : 530, 'SD': 945, 'Fire Bomb' : 600, 'Energy Wall': 1000, 'Wild Growth' : 600, 'Enchented Spear': 350, 'Holy Missile': 300, 'Burst Arrow': 290}
-FOOD_TIMERS = {'Dragon Ham' : 720, 'Brown Mushroom': 264, 'Ham': 360}
-RING_TIMERS = {}
+FOOD_TIMERS = {'Brown Mushroom': 264, 'Dragon Ham' : 720, 'Ham': 360}
+RING_TIMERS = {'LIFE_RING' : 1200 , 'RING_OF_HEALING' : 450}
+ITEM_REGEN = {'SOFT_BOOTS' : 12*REST_BONUS/6, 'LIFE_RING' : 8*REST_BONUS/6, 'RING_OF_HEALING' : 24*REST_BONUS/6}
+SB_DURATION = 14400
 
 
 
@@ -25,8 +28,12 @@ class Window(QMainWindow):
     def __init__(self):
         super().__init__()
         self.sb  = False
-        self.roh = False
+        self.ring = False
+        self.ring_type = list(RING_TIMERS.keys())[0]
         self.sb_timer = 0
+        self.sb_count = 0
+        self.ring_timer = 0
+        self.ring_count = 0
         self.voc   = list(VOC_REGEN.keys())[0]
         self.food  = list(FOOD_TIMERS.keys())[0]
         self.spell = list(MANA_PER_SPELL.keys())[0]
@@ -35,7 +42,7 @@ class Window(QMainWindow):
         self.setWindowTitle("Night's Watch")
 
         # setting geometry
-        self.setGeometry(100, 100, 600, 400)
+        self.setGeometry(100, 100, 600, 500)
 
         # calling method
         self.Vocations()
@@ -45,6 +52,9 @@ class Window(QMainWindow):
 
         # calling method
         self.Food()
+
+        # calling method
+        self.Rings()
 
         # showing all the widgets
         self.show()
@@ -83,13 +93,7 @@ class Window(QMainWindow):
         b1.setChecked(False)
         b1.move(50,250)
         b1.resize(200,50)
-        b1.stateChanged.connect(self.btnstate)
-
-        b2 = QCheckBox("Ring of Healing", self)
-        b2.setChecked(False)
-        b2.move(300,250)
-        b2.resize(200,50)
-        b2.stateChanged.connect(self.roh_state)
+        b1.stateChanged.connect(self.sb_state)
 
         sb_i = QLineEdit('0', self)
         sb_i.setValidator(QIntValidator())
@@ -97,34 +101,40 @@ class Window(QMainWindow):
         sb_i.setAlignment(Qt.AlignRight)
         sb_i.setGeometry(100,300, 150, 40)
         sb_i.setFont(QFont("Arial", 12))
-        sb_i.textChanged.connect(self.textchanged)
+        sb_i.textChanged.connect(self.sb_timer_changed)
 
         sb_label = QLabel("Time Left", self)
         sb_label.setGeometry(50, 300, 120, 60)
         sb_label.setWordWrap(True)
 
-        roh_i = QLineEdit('0', self)
-        roh_i.setValidator(QIntValidator())
-        roh_i.setMaxLength(3)
-        roh_i.setAlignment(Qt.AlignRight)
-        roh_i.setGeometry(350,300, 100, 40)
-        roh_i.setFont(QFont("Arial", 12))
-        roh_i.textChanged.connect(self.textchanged)
+        sb_count_i = QLineEdit('0', self)
+        sb_count_i.setValidator(QIntValidator())
+        sb_count_i.setMaxLength(3)
+        sb_count_i.setAlignment(Qt.AlignRight)
+        sb_count_i.setGeometry(100,350, 150, 40)
+        sb_count_i.setFont(QFont("Arial", 12))
+        sb_count_i.textChanged.connect(self.sb_count_changed)
 
-        roh_label = QLabel("Amount", self)
-        roh_label.setGeometry(300, 300, 120, 60)
-        roh_label.setWordWrap(True)
+        sb_count_label = QLabel("Amount", self)
+        sb_count_label.setGeometry(50, 350, 120, 60)
+        sb_count_label.setWordWrap(True)
 
-    def textchanged(self,text):
+    def sb_timer_changed(self,text):
         self.sb_timer = int(text)
 
-    def btnstate(self, state):
+    def sb_count_changed(self,text):
+        self.sb_count = int(text)
+
+    def sb_state(self, state):
         self.sb = True if state == QtCore.Qt.Checked else False
         print(f'Updated sb [ {self.sb} ]')
 
-    def roh_state(self, state):
-        self.roh = True if state == QtCore.Qt.Checked else False
-        print(f'Updated roh [ {self.roh} ]')
+    def ring_state(self, state):
+        self.ring = True if state == QtCore.Qt.Checked else False
+        print(f'Updated ring usage [ {self.ring} ]')
+
+    def ring_count_changed(self,text):
+        self.ring_count = int(text)
 
     @pyqtSlot()
     def on_click(self):
@@ -164,14 +174,52 @@ class Window(QMainWindow):
         # adding action to combo box
         self.food_box.activated.connect(self.update_food)
 
+    # method for widgets
+    def Rings(self):
+
+        b2 = QCheckBox("Use Rings", self)
+        b2.setChecked(False)
+        b2.move(300,250)
+        b2.resize(200,50)
+        b2.stateChanged.connect(self.ring_state)
+
+        ring_i = QLineEdit('0', self)
+        ring_i.setValidator(QIntValidator())
+        ring_i.setMaxLength(3)
+        ring_i.setAlignment(Qt.AlignRight)
+        ring_i.setGeometry(350,300, 100, 40)
+        ring_i.setFont(QFont("Arial", 12))
+        ring_i.textChanged.connect(self.ring_count_changed)
+
+        ring_label = QLabel("Amount", self)
+        ring_label.setGeometry(300, 300, 120, 60)
+        ring_label.setWordWrap(True)
+
+        # creating a combo box widget
+        self.ring_box = QComboBox(self)
+
+        # setting geometry of combo box
+        self.ring_box.setGeometry(400, 260, 150, 30)
+        # making it editable
+        self.ring_box.setEditable(True)
+
+        # adding list of items to combo box
+        self.ring_box.addItems(RING_TIMERS.keys())
+
+        # adding action to combo box
+        self.ring_box.activated.connect(self.update_ring)
+
     def update_food(self):
         self.food = self.food_box.currentText()
 
+    def update_ring(self):
+        self.ring_type = self.ring_box.currentText()
+
     def update_spell(self):
-        self.spell = self.food_box.currentText()
+        self.spell = self.spell_box.currentText()
 
     def update_voc(self):
-        self.voc = self.food_box.currentText()
+        self.voc = self.voc_box.currentText()
 
     @pyqtSlot()
     def start(self):
@@ -180,7 +228,8 @@ class Window(QMainWindow):
         print(f"{'Using' if self.sb else 'not using'} soft boots")
         RUNE_HOTKEY = Key.f2
         FOOD_HOTKEY = Key.f1
-        ROH_HOTKEY = Key.f3
+        SB_HOTKEY   = Key.f3
+        RING_HOTKEY = Key.f3
 
         #TODO: Change assignment to function
         mana_regen = VOC_REGEN[self.voc] if not self.sb else VOC_REGEN[self.voc]+4
@@ -193,7 +242,7 @@ class Window(QMainWindow):
 
         def key_event(key):
             keyboard.press(key)
-            time.sleep(.5)
+            time.sleep(.3)
             keyboard.release(key)
 
         runer_struct = {'spell' : {'action' : RUNE_HOTKEY, 'duration' : RUNE_DURATION, 'jitter' : 5},
