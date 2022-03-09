@@ -16,10 +16,9 @@ keyboard = Controller()
 VOC_REGEN = {'Mage' : 2, 'Paladin' : 4/3, 'Knight': 2/3}
 MANA_PER_SPELL = {'Avalanche/GFB' : 530, 'SD': 945, 'Fire Bomb' : 600, 'Energy Wall': 1000, 'Wild Growth' : 600, 'Enchented Spear': 350, 'Holy Missile': 300, 'Burst Arrow': 290}
 FOOD_TIMERS = {'Dragon Ham' : 720, 'Brown Mushroom': 264, 'Ham': 360}
+RING_TIMERS = {}
 
-voc   = list(VOC_REGEN.keys())[0]
-food  = list(FOOD_TIMERS.keys())[0]
-spell = list(MANA_PER_SPELL.keys())[0]
+
 
 class Window(QMainWindow):
 
@@ -28,6 +27,9 @@ class Window(QMainWindow):
         self.sb  = False
         self.roh = False
         self.sb_timer = 0
+        self.voc   = list(VOC_REGEN.keys())[0]
+        self.food  = list(FOOD_TIMERS.keys())[0]
+        self.spell = list(MANA_PER_SPELL.keys())[0]
 
         # setting title
         self.setWindowTitle("Night's Watch")
@@ -163,28 +165,28 @@ class Window(QMainWindow):
         self.food_box.activated.connect(self.update_food)
 
     def update_food(self):
-        food = self.food_box.currentText()
+        self.food = self.food_box.currentText()
 
     def update_spell(self):
-        spell = self.food_box.currentText()
+        self.spell = self.food_box.currentText()
 
     def update_voc(self):
-        voc = self.food_box.currentText()
+        self.voc = self.food_box.currentText()
 
     @pyqtSlot()
     def start(self):
         print("Running Automationd for:")
-        print(f"{voc} using \'{spell}\' eating {food}")
+        print(f"{self.voc} using \'{self.spell}\' eating {self.food}")
         print(f"{'Using' if self.sb else 'not using'} soft boots")
         RUNE_HOTKEY = Key.f2
         FOOD_HOTKEY = Key.f1
         ROH_HOTKEY = Key.f3
 
         #TODO: Change assignment to function
-        mana_regen = VOC_REGEN[voc] if not self.sb else VOC_REGEN[voc]+4
+        mana_regen = VOC_REGEN[self.voc] if not self.sb else VOC_REGEN[self.voc]+4
 
-        RUNE_DURATION = MANA_PER_SPELL[spell] / mana_regen
-        FOOD_DURATION = FOOD_TIMERS[food]
+        RUNE_DURATION = MANA_PER_SPELL[self.spell] / mana_regen
+        FOOD_DURATION = FOOD_TIMERS[self.food]
 
         # Startup time
         time.sleep(5)
@@ -218,7 +220,7 @@ class Window(QMainWindow):
                 sb_timekeep += 1
                 #TODO: Change assignment to function
                 if (self.sb_timer and (sb_timekeep >= self.sb_timer*60)):
-                    runer_struct['spell']['duration'] = MANA_PER_SPELL[spell] / VOC_REGEN[voc]
+                    runer_struct['spell']['duration'] = MANA_PER_SPELL[self.spell] / VOC_REGEN[self.voc]
                 sys.stdout.write("\033[F") # Cursor up one line
             time.sleep(1)
 
