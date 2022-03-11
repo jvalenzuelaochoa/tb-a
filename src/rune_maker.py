@@ -1,3 +1,4 @@
+from cmath import inf
 import time
 import sys
 import argparse
@@ -21,17 +22,35 @@ RING_TIMERS = {'LIFE_RING' : 1200 , 'RING_OF_HEALING' : 450}
 ITEM_REGEN = {'SOFT_BOOTS' : 12*REST_BONUS/6, 'LIFE_RING' : 8*REST_BONUS/6, 'RING_OF_HEALING' : 24*REST_BONUS/6}
 SB_DURATION = 14400
 
+class KeyCombination:
+    def __init__(self, modifier, key) -> None:
+        self.modifier = modifier
+        self.key = key
+
+    def press(self):
+        if self.modifier != '':
+            keyboard.press(self.modifier)
+            time.sleep(.1)
+            keyboard.press(self.key)
+            time.sleep(.3)
+            keyboard.release(self.key)
+            time.sleep(.1)
+            keyboard.release(self.modifier)
+        else:
+            keyboard.press(self.key)
+            time.sleep(.3)
+            keyboard.release(self.key)
 
 
 class Window(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.sb  = False
+        self.soft_boots  = False
         self.ring = False
         self.ring_type = list(RING_TIMERS.keys())[0]
-        self.sb_timer = 0
-        self.sb_count = 0
+        self.soft_boots_timer = 0
+        self.soft_boots_count = 0
         self.ring_timer = 0
         self.ring_count = 0
         self.voc   = list(VOC_REGEN.keys())[0]
@@ -93,41 +112,41 @@ class Window(QMainWindow):
         b1.setChecked(False)
         b1.move(50,250)
         b1.resize(200,50)
-        b1.stateChanged.connect(self.sb_state)
+        b1.stateChanged.connect(self.soft_boots_state)
 
-        sb_i = QLineEdit('0', self)
-        sb_i.setValidator(QIntValidator())
-        sb_i.setMaxLength(3)
-        sb_i.setAlignment(Qt.AlignRight)
-        sb_i.setGeometry(100,300, 150, 40)
-        sb_i.setFont(QFont("Arial", 12))
-        sb_i.textChanged.connect(self.sb_timer_changed)
+        soft_boots_i = QLineEdit('0', self)
+        soft_boots_i.setValidator(QIntValidator())
+        soft_boots_i.setMaxLength(3)
+        soft_boots_i.setAlignment(Qt.AlignRight)
+        soft_boots_i.setGeometry(100,300, 150, 40)
+        soft_boots_i.setFont(QFont("Arial", 12))
+        soft_boots_i.textChanged.connect(self.soft_boots_timer_changed)
 
-        sb_label = QLabel("Time Left", self)
-        sb_label.setGeometry(50, 300, 120, 60)
-        sb_label.setWordWrap(True)
+        soft_boots_label = QLabel("Time Left", self)
+        soft_boots_label.setGeometry(50, 300, 120, 60)
+        soft_boots_label.setWordWrap(True)
 
-        sb_count_i = QLineEdit('0', self)
-        sb_count_i.setValidator(QIntValidator())
-        sb_count_i.setMaxLength(3)
-        sb_count_i.setAlignment(Qt.AlignRight)
-        sb_count_i.setGeometry(100,350, 150, 40)
-        sb_count_i.setFont(QFont("Arial", 12))
-        sb_count_i.textChanged.connect(self.sb_count_changed)
+        soft_boots_count_i = QLineEdit('0', self)
+        soft_boots_count_i.setValidator(QIntValidator())
+        soft_boots_count_i.setMaxLength(3)
+        soft_boots_count_i.setAlignment(Qt.AlignRight)
+        soft_boots_count_i.setGeometry(100,350, 150, 40)
+        soft_boots_count_i.setFont(QFont("Arial", 12))
+        soft_boots_count_i.textChanged.connect(self.soft_boots_count_changed)
 
-        sb_count_label = QLabel("Amount", self)
-        sb_count_label.setGeometry(50, 350, 120, 60)
-        sb_count_label.setWordWrap(True)
+        soft_boots_count_label = QLabel("Amount", self)
+        soft_boots_count_label.setGeometry(50, 350, 120, 60)
+        soft_boots_count_label.setWordWrap(True)
 
-    def sb_timer_changed(self,text):
-        self.sb_timer = int(text)
+    def soft_boots_timer_changed(self,text):
+        self.soft_boots_timer = int(text)
 
-    def sb_count_changed(self,text):
-        self.sb_count = int(text)
+    def soft_boots_count_changed(self,text):
+        self.soft_boots_count = int(text)
 
-    def sb_state(self, state):
-        self.sb = True if state == QtCore.Qt.Checked else False
-        print(f'Updated sb [ {self.sb} ]')
+    def soft_boots_state(self, state):
+        self.soft_boots = True if state == QtCore.Qt.Checked else False
+        print(f'Updated sb [ {self.soft_boots} ]')
 
     def ring_state(self, state):
         self.ring = True if state == QtCore.Qt.Checked else False
@@ -225,14 +244,14 @@ class Window(QMainWindow):
     def start(self):
         print("Running Automationd for:")
         print(f"{self.voc} using \'{self.spell}\' eating {self.food}")
-        print(f"{'Using' if self.sb else 'not using'} soft boots")
-        RUNE_HOTKEY = Key.f2
-        FOOD_HOTKEY = Key.f1
-        SB_HOTKEY   = Key.f3
-        RING_HOTKEY = Key.f3
+        print(f"{'Using' if self.soft_boots else 'not using'} soft boots")
+        FOOD_HOTKEY = KeyCombination('', Key.f1)
+        RUNE_HOTKEY = KeyCombination('', Key.f2)
+        SB_HOTKEY   = KeyCombination(Key.shift, Key.f1)
+        RING_HOTKEY = KeyCombination(Key.shift, Key.f2)
 
         #TODO: Change assignment to function
-        mana_regen = VOC_REGEN[self.voc] if not self.sb else VOC_REGEN[self.voc]+4
+        mana_regen = VOC_REGEN[self.voc] if not self.soft_boots else VOC_REGEN[self.voc]+4
 
         RUNE_DURATION = MANA_PER_SPELL[self.spell] / mana_regen
         FOOD_DURATION = FOOD_TIMERS[self.food]
@@ -240,36 +259,44 @@ class Window(QMainWindow):
         # Startup time
         time.sleep(5)
 
-        def key_event(key):
-            keyboard.press(key)
-            time.sleep(.3)
-            keyboard.release(key)
+        runer_struct = {'spell' : {'action' : RUNE_HOTKEY, 'duration' : RUNE_DURATION, 'limit' : inf, 'mana_impact' : 0, 'jitter' : 5},
+                        'food' :  {'action' : FOOD_HOTKEY, 'duration' : FOOD_DURATION, 'limit' : inf, 'mana_impact' : VOC_REGEN[self.voc], 'jitter' : 3}}
 
-        runer_struct = {'spell' : {'action' : RUNE_HOTKEY, 'duration' : RUNE_DURATION, 'jitter' : 5},
-                        'food' :  {'action' : FOOD_HOTKEY, 'duration' : FOOD_DURATION, 'jitter' : 14}}
+        if self.soft_boots:
+            runer_struct['sb'] = {'action' : SB_HOTKEY, 'duration' : SB_DURATION, 'limit' : self.soft_boots_count, 'mana_impact' : ITEM_REGEN['SOFT_BOOTS'], 'jitter' : 14}
 
-        counters = [0] * len(runer_struct.keys())
-        sb_timekeep = 0
+        if self.ring:
+            runer_struct['ring'] = {'action' : RING_HOTKEY, 'duration' : RING_TIMERS[self.ring_type], 'limit' : self.ring_count, 'mana_impact' : ITEM_REGEN[self.ring_type], 'jitter' : 9}
+
+        timers = dict()
+        counters = dict()
+
+        for x in  runer_struct.keys():
+            timers[x] = 0
+            counters[x] = 0
+
+        # Overwrite softbotts initial counter
+        if self.soft_boots:
+            timers['sb'] = self.soft_boots_timer *60
 
         while(True):
-            for i, k in enumerate(runer_struct.keys()):
-                if counters[i] <= 0:
-                    key_event(runer_struct[k]['action'])
-                    # Add variable deadtime to avoid exact patterns
-                    counters[i] = runer_struct[k]['duration'] + randint(0, runer_struct[k]['jitter'])
+            for i in runer_struct.keys():
+                if timers[i] <= 0:
+                    counters[i] +=1
+                    if counters[i] < runer_struct[i]['limit']:
+                        runer_struct[i]['action'].press()
+                        # Add variable deadtime to avoid exact patterns
+                        timers[i] = runer_struct[i]['duration'] + randint(0, runer_struct[i]['jitter'])
+                    else:
+                        runer_struct[i]['mana_impact'] = 0
+                    mana_regen = 0
+                    for x in  runer_struct.keys():
+                        mana_regen += runer_struct[x]['mana_impact']
+                    runer_struct['spell']['duration'] = MANA_PER_SPELL[self.spell] / mana_regen
                 # Extra white space to clear carries from larger numbers
-                print("%s counter %.2f     " % (k, counters[i]))
-                counters[i] -= 1
-            if self.sb:
-                print(f"{self.sb_timer*60-sb_timekeep} left on soft boots.")
-
-            sys.stdout.write("\033[F") # Cursor up one line
-            sys.stdout.write("\033[F") # Cursor up one line
-            if self.sb:
-                sb_timekeep += 1
-                #TODO: Change assignment to function
-                if (self.sb_timer and (sb_timekeep >= self.sb_timer*60)):
-                    runer_struct['spell']['duration'] = MANA_PER_SPELL[self.spell] / VOC_REGEN[self.voc]
+                print("%s counter %.2f     " % (i, timers[i]))
+                timers[i] -= 1
+            for _ in range(len(runer_struct.keys())):
                 sys.stdout.write("\033[F") # Cursor up one line
             time.sleep(1)
 
