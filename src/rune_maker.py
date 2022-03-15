@@ -23,6 +23,7 @@ ITEM_REGEN = {'SOFT_BOOTS' : 12*REST_BONUS/6, 'LIFE_RING' : 8*REST_BONUS/6, 'RIN
 SB_DURATION = 14400
 
 class KeyCombination:
+
     def __init__(self, modifier, key) -> None:
         self.modifier = modifier
         self.key = key
@@ -138,11 +139,17 @@ class Window(QMainWindow):
         soft_boots_count_label.setGeometry(50, 350, 120, 60)
         soft_boots_count_label.setWordWrap(True)
 
+    def validate_num_box(self,text):
+        try:
+            return int(text)
+        except:
+            return 0
+
     def soft_boots_timer_changed(self,text):
-        self.soft_boots_timer = int(text)
+        self.soft_boots_timer = self.validate_num_box(text)
 
     def soft_boots_count_changed(self,text):
-        self.soft_boots_count = int(text)
+        self.soft_boots_count = self.validate_num_box(text)
 
     def soft_boots_state(self, state):
         self.soft_boots = True if state == QtCore.Qt.Checked else False
@@ -153,7 +160,7 @@ class Window(QMainWindow):
         print(f'Updated ring usage [ {self.ring} ]')
 
     def ring_count_changed(self,text):
-        self.ring_count = int(text)
+        self.ring_count = self.validate_num_box(text)
 
     @pyqtSlot()
     def on_click(self):
