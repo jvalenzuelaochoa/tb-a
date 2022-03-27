@@ -42,6 +42,18 @@ class KeyCombination:
             time.sleep(.3)
             keyboard.release(self.key)
 
+def no_routine():
+    pass
+
+def terminate_program():
+    sys.exit()
+
+
+def take_action(routine):
+    key_combination, post_routine = routine
+    key_combination.press()
+    post_routine()
+
 
 class Window(QMainWindow):
 
@@ -57,6 +69,8 @@ class Window(QMainWindow):
         self.voc   = list(VOC_REGEN.keys())[0]
         self.food  = list(FOOD_TIMERS.keys())[0]
         self.spell = list(MANA_PER_SPELL.keys())[0]
+        self.logout = False
+        self.logout_time = 0
 
         # setting title
         self.setWindowTitle("Night's Watch")
@@ -75,6 +89,8 @@ class Window(QMainWindow):
 
         # calling method
         self.Rings()
+
+        self.LogOutBox()
 
         # showing all the widgets
         self.show()
@@ -162,9 +178,15 @@ class Window(QMainWindow):
     def ring_count_changed(self,text):
         self.ring_count = self.validate_num_box(text)
 
+    def logout_state(self, state):
+        self.logout = True if state == QtCore.Qt.Checked else False
+
+    def logout_time_changed(self,text):
+        self.logout_time = self.validate_num_box(text)
+
     @pyqtSlot()
     def on_click(self):
-        print('PyQt5 button click')
+        terminate_program()
 
     # method for widgets
     def Spell(self):
@@ -235,6 +257,26 @@ class Window(QMainWindow):
         # adding action to combo box
         self.ring_box.activated.connect(self.update_ring)
 
+    def LogOutBox(self):
+
+        b3 = QCheckBox("Set Logout", self)
+        b3.setChecked(False)
+        b3.move(300,400)
+        b3.resize(200,50)
+        b3.stateChanged.connect(self.logout_state)
+
+        log_i = QLineEdit('0', self)
+        log_i.setValidator(QIntValidator())
+        log_i.setMaxLength(3)
+        log_i.setAlignment(Qt.AlignRight)
+        log_i.setGeometry(350,450, 100, 40)
+        log_i.setFont(QFont("Arial", 12))
+        log_i.textChanged.connect(self.logout_time_changed)
+
+        ring_label = QLabel("Time", self)
+        ring_label.setGeometry(300, 450, 120, 60)
+        ring_label.setWordWrap(True)
+
     def update_food(self):
         self.food = self.food_box.currentText()
 
@@ -256,6 +298,7 @@ class Window(QMainWindow):
         RUNE_HOTKEY = KeyCombination('', Key.f2)
         SB_HOTKEY   = KeyCombination(Key.shift, Key.f1)
         RING_HOTKEY = KeyCombination(Key.shift, Key.f2)
+        LOGOUT_HOTKEY = KeyCombination(Key.ctrl_l, 'l' )
 
         #TODO: Change assignment to function
         mana_regen = VOC_REGEN[self.voc] if not self.soft_boots else VOC_REGEN[self.voc]+4
@@ -266,14 +309,17 @@ class Window(QMainWindow):
         # Startup time
         time.sleep(5)
 
-        runer_struct = {'spell' : {'action' : RUNE_HOTKEY, 'duration' : RUNE_DURATION, 'limit' : inf, 'mana_impact' : 0, 'jitter' : 5},
-                        'food' :  {'action' : FOOD_HOTKEY, 'duration' : FOOD_DURATION, 'limit' : inf, 'mana_impact' : VOC_REGEN[self.voc], 'jitter' : 3}}
+        runer_struct = {'spell' : {'action' : (RUNE_HOTKEY, no_routine), 'duration' : RUNE_DURATION, 'limit' : inf, 'mana_impact' : 0, 'jitter' : 4},
+                        'food' :  {'action' : (FOOD_HOTKEY, no_routine), 'duration' : FOOD_DURATION, 'limit' : inf, 'mana_impact' : VOC_REGEN[self.voc], 'jitter' : 3}}
 
         if self.soft_boots:
-            runer_struct['sb'] = {'action' : SB_HOTKEY, 'duration' : SB_DURATION, 'limit' : self.soft_boots_count, 'mana_impact' : ITEM_REGEN['SOFT_BOOTS'], 'jitter' : 14}
+            runer_struct['sb'] = {'action' : (SB_HOTKEY, no_routine), 'duration' : SB_DURATION, 'limit' : self.soft_boots_count, 'mana_impact' : ITEM_REGEN['SOFT_BOOTS'], 'jitter' : 14}
 
         if self.ring:
-            runer_struct['ring'] = {'action' : RING_HOTKEY, 'duration' : RING_TIMERS[self.ring_type], 'limit' : self.ring_count, 'mana_impact' : ITEM_REGEN[self.ring_type], 'jitter' : 9}
+            runer_struct['ring'] = {'action' : (RING_HOTKEY, no_routine), 'duration' : RING_TIMERS[self.ring_type], 'limit' : self.ring_count, 'mana_impact' : ITEM_REGEN[self.ring_type], 'jitter' : 9}
+
+        if self.logout:
+            runer_struct['logout'] = {'action' : (LOGOUT_HOTKEY, terminate_program), 'duration' : self.logout_time, 'limit' : 2, 'mana_impact' : 0, 'jitter' : 9} #limit is 2 to ensure it gets clicked at least once
 
         timers = dict()
         counters = dict()
@@ -286,12 +332,16 @@ class Window(QMainWindow):
         if self.soft_boots:
             timers['sb'] = self.soft_boots_timer *60
 
+        # Overwrite softbotts initial counter
+        if self.logout:
+            timers['logout'] = self.logout_time *60
+
         while(True):
             for i in runer_struct.keys():
                 if timers[i] <= 0:
                     counters[i] +=1
                     if counters[i] < runer_struct[i]['limit']:
-                        runer_struct[i]['action'].press()
+                        take_action(runer_struct[i]['action'])
                         # Add variable deadtime to avoid exact patterns
                         timers[i] = runer_struct[i]['duration'] + randint(0, runer_struct[i]['jitter'])
                     else:
