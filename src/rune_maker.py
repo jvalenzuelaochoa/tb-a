@@ -1,46 +1,26 @@
 from cmath import inf
 import time
 import sys
-import argparse
 from random import randint
 from pynput.keyboard import Key, Controller
 from PyQt5.QtWidgets import *
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
-
+import threading
+import key_combination as kc
+import runer_thread as rt
 
 keyboard = Controller()
-
 
 # TODO: validate dictionaries
 REST_BONUS = 2
 VOC_REGEN = {'Mage' : 2, 'Paladin' : 4/3, 'Knight': 2/3}
-MANA_PER_SPELL = {'Avalanche/GFB' : 530, 'SD': 945, 'Fire Bomb' : 600, 'Energy Wall': 1000, 'Wild Growth' : 600, 'Enchented Spear': 350, 'Holy Missile': 300, 'Burst Arrow': 290}
+MANA_PER_SPELL = {'Avalanche/GFB' : 530, 'SD': 945, 'Fire Bomb' : 600, 'Energy Wall': 1000, 'Wild Growth' : 600, 'Enchented Spear': 350, 'Holy Missile': 300, 'Burst Arrow': 290, 'Salvation': 210}
 FOOD_TIMERS = {'Brown Mushroom': 264, 'Dragon Ham' : 720, 'Ham': 360}
 RING_TIMERS = {'LIFE_RING' : 1200 , 'RING_OF_HEALING' : 450}
 ITEM_REGEN = {'SOFT_BOOTS' : 12*REST_BONUS/6, 'LIFE_RING' : 8*REST_BONUS/6, 'RING_OF_HEALING' : 24*REST_BONUS/6}
 SB_DURATION = 14400
-
-class KeyCombination:
-
-    def __init__(self, modifier, key) -> None:
-        self.modifier = modifier
-        self.key = key
-
-    def press(self):
-        if self.modifier != '':
-            keyboard.press(self.modifier)
-            time.sleep(.1)
-            keyboard.press(self.key)
-            time.sleep(.3)
-            keyboard.release(self.key)
-            time.sleep(.1)
-            keyboard.release(self.modifier)
-        else:
-            keyboard.press(self.key)
-            time.sleep(.3)
-            keyboard.release(self.key)
 
 def no_routine():
     pass
@@ -70,7 +50,9 @@ class Window(QMainWindow):
         self.food  = list(FOOD_TIMERS.keys())[0]
         self.spell = list(MANA_PER_SPELL.keys())[0]
         self.logout = False
+        self._runer_threads = dict()
         self.logout_time = 0
+        self._run_main_thread = False
 
         # setting title
         self.setWindowTitle("Night's Watch")
@@ -81,16 +63,16 @@ class Window(QMainWindow):
         # calling method
         self.Vocations()
 
-        # calling method
-        self.Spell()
-
-        # calling method
+        # calling Mana Modifiers
         self.Food()
-
-        # calling method
+        self.SoftBoots()
         self.Rings()
 
+        # calling method
+        self.Spell()
         self.LogOutBox()
+
+        self.FlowButtons()
 
         # showing all the widgets
         self.show()
@@ -99,61 +81,64 @@ class Window(QMainWindow):
     def Vocations(self):
 
         # creating a combo box widget
-        self.voc_box = QComboBox(self)
+        self._voc_box = QComboBox(self)
 
         # setting geometry of combo box
-        self.voc_box.setGeometry(50, 50, 150, 30)
+        self._voc_box.setGeometry(50, 50, 150, 30)
 
         # making it editable
-        self.voc_box.setEditable(True)
+        self._voc_box.setEditable(True)
 
         # adding list of items to combo box
-        self.voc_box.addItems(VOC_REGEN.keys())
+        self._voc_box.addItems(VOC_REGEN.keys())
 
         # adding action to combo box
-        self.voc_box.activated.connect(self.update_voc)
+        self._voc_box.activated.connect(self.update_voc)
+ 
+    def SoftBoots(self):
+        self._sb_button = QCheckBox("Soft Boots", self)
+        self._sb_button.setChecked(False)
+        self._sb_button.move(50,250)
+        self._sb_button.resize(200,50)
+        self._sb_button.stateChanged.connect(self.soft_boots_state)
 
+        self._sb_label = QLabel("Time Left", self)
+        self._sb_label.setGeometry(50, 300, 120, 60)
+        self._sb_label.setWordWrap(True)
 
-        self.start_button = QPushButton('Start!', self)
-        self.start_button.setToolTip('Start Counters')
-        self.start_button.move(250,80)
-        self.start_button.clicked.connect(self.start)
+        self._sb_time_textbox = QLineEdit('0', self)
+        self._sb_time_textbox.setValidator(QIntValidator())
+        self._sb_time_textbox.setMaxLength(3)
+        self._sb_time_textbox.setAlignment(Qt.AlignRight)
+        self._sb_time_textbox.setGeometry(100,300, 150, 40)
+        self._sb_time_textbox.setFont(QFont("Arial", 12))
+        self._sb_time_textbox.textChanged.connect(self.soft_boots_timer_changed)
 
+        self._sb_count_label = QLabel("Amount", self)
+        self._sb_count_label.setGeometry(50, 350, 120, 60)
+        self._sb_count_label.setWordWrap(True)
 
-        self.start_button = QPushButton('STOP!', self)
-        self.start_button.setToolTip('stop Counters')
-        self.start_button.move(250,150)
-        self.start_button.clicked.connect(self.on_click)
+        self._sb_count_textbox = QLineEdit('0', self)
+        self._sb_count_textbox.setValidator(QIntValidator())
+        self._sb_count_textbox.setMaxLength(3)
+        self._sb_count_textbox.setAlignment(Qt.AlignRight)
+        self._sb_count_textbox.setGeometry(100,350, 150, 40)
+        self._sb_count_textbox.setFont(QFont("Arial", 12))
+        self._sb_count_textbox.textChanged.connect(self.soft_boots_count_changed)
 
-        b1 = QCheckBox("Soft Boots", self)
-        b1.setChecked(False)
-        b1.move(50,250)
-        b1.resize(200,50)
-        b1.stateChanged.connect(self.soft_boots_state)
+    def FlowButtons(self):
 
-        soft_boots_i = QLineEdit('0', self)
-        soft_boots_i.setValidator(QIntValidator())
-        soft_boots_i.setMaxLength(3)
-        soft_boots_i.setAlignment(Qt.AlignRight)
-        soft_boots_i.setGeometry(100,300, 150, 40)
-        soft_boots_i.setFont(QFont("Arial", 12))
-        soft_boots_i.textChanged.connect(self.soft_boots_timer_changed)
+        self._start_button = QPushButton('Start!', self)
+        self._start_button.setToolTip('Start Counters')
+        self._start_button.move(250,80)
 
-        soft_boots_label = QLabel("Time Left", self)
-        soft_boots_label.setGeometry(50, 300, 120, 60)
-        soft_boots_label.setWordWrap(True)
-
-        soft_boots_count_i = QLineEdit('0', self)
-        soft_boots_count_i.setValidator(QIntValidator())
-        soft_boots_count_i.setMaxLength(3)
-        soft_boots_count_i.setAlignment(Qt.AlignRight)
-        soft_boots_count_i.setGeometry(100,350, 150, 40)
-        soft_boots_count_i.setFont(QFont("Arial", 12))
-        soft_boots_count_i.textChanged.connect(self.soft_boots_count_changed)
-
-        soft_boots_count_label = QLabel("Amount", self)
-        soft_boots_count_label.setGeometry(50, 350, 120, 60)
-        soft_boots_count_label.setWordWrap(True)
+        self._stop_button = QPushButton('STOP!', self)
+        self._stop_button.setToolTip('stop Counters')
+        self._stop_button.move(250,150)
+        self._stop_button.setEnabled(False)
+        
+        self._start_button.clicked.connect(self.start_main_thread)
+        self._stop_button.clicked.connect(self.on_stop_click)
 
     def validate_num_box(self,text):
         try:
@@ -185,120 +170,151 @@ class Window(QMainWindow):
         self.logout_time = self.validate_num_box(text)
 
     @pyqtSlot()
-    def on_click(self):
-        terminate_program()
+    def on_stop_click(self):
+        self.stop_main_thread()
 
     # method for widgets
     def Spell(self):
 
         # creating a combo box widget
-        self.spell_box = QComboBox(self)
+        self._spell_box = QComboBox(self)
 
         # setting geometry of combo box
-        self.spell_box.setGeometry(50, 100, 150, 30)
+        self._spell_box.setGeometry(50, 100, 150, 30)
         # making it editable
-        self.spell_box.setEditable(True)
+        self._spell_box.setEditable(True)
 
         # adding list of items to combo box
-        self.spell_box.addItems(MANA_PER_SPELL.keys())
+        self._spell_box.addItems(MANA_PER_SPELL.keys())
 
         # adding action to combo box
-        self.spell_box.activated.connect(self.update_spell)
+        self._spell_box.activated.connect(self.update_spell)
 
     # method for widgets
     def Food(self):
 
         # creating a combo box widget
-        self.food_box = QComboBox(self)
+        self._food_box = QComboBox(self)
 
         # setting geometry of combo box
-        self.food_box.setGeometry(50, 150, 150, 30)
+        self._food_box.setGeometry(50, 150, 150, 30)
         # making it editable
-        self.food_box.setEditable(True)
+        self._food_box.setEditable(True)
 
         # adding list of items to combo box
-        self.food_box.addItems(FOOD_TIMERS.keys())
+        self._food_box.addItems(FOOD_TIMERS.keys())
 
         # adding action to combo box
-        self.food_box.activated.connect(self.update_food)
+        self._food_box.activated.connect(self.update_food)
 
     # method for widgets
     def Rings(self):
 
-        b2 = QCheckBox("Use Rings", self)
-        b2.setChecked(False)
-        b2.move(300,250)
-        b2.resize(200,50)
-        b2.stateChanged.connect(self.ring_state)
+        self._ring_checkbox = QCheckBox("Use Rings", self)
+        self._ring_checkbox.setChecked(False)
+        self._ring_checkbox.move(300,250)
+        self._ring_checkbox.resize(200,50)
+        self._ring_checkbox.stateChanged.connect(self.ring_state)
 
-        ring_i = QLineEdit('0', self)
-        ring_i.setValidator(QIntValidator())
-        ring_i.setMaxLength(3)
-        ring_i.setAlignment(Qt.AlignRight)
-        ring_i.setGeometry(350,300, 100, 40)
-        ring_i.setFont(QFont("Arial", 12))
-        ring_i.textChanged.connect(self.ring_count_changed)
+        self._ring_count_textbox = QLineEdit('0', self)
+        self._ring_count_textbox.setValidator(QIntValidator())
+        self._ring_count_textbox.setMaxLength(3)
+        self._ring_count_textbox.setAlignment(Qt.AlignRight)
+        self._ring_count_textbox.setGeometry(350,300, 100, 40)
+        self._ring_count_textbox.setFont(QFont("Arial", 12))
+        self._ring_count_textbox.textChanged.connect(self.ring_count_changed)
 
-        ring_label = QLabel("Amount", self)
-        ring_label.setGeometry(300, 300, 120, 60)
-        ring_label.setWordWrap(True)
+        self._ring_label = QLabel("Amount", self)
+        self._ring_label.setGeometry(300, 300, 120, 60)
+        self._ring_label.setWordWrap(True)
 
         # creating a combo box widget
-        self.ring_box = QComboBox(self)
+        self._ring_box = QComboBox(self)
 
         # setting geometry of combo box
-        self.ring_box.setGeometry(400, 260, 150, 30)
+        self._ring_box.setGeometry(400, 260, 150, 30)
         # making it editable
-        self.ring_box.setEditable(True)
+        self._ring_box.setEditable(True)
 
         # adding list of items to combo box
-        self.ring_box.addItems(RING_TIMERS.keys())
+        self._ring_box.addItems(RING_TIMERS.keys())
 
         # adding action to combo box
-        self.ring_box.activated.connect(self.update_ring)
+        self._ring_box.activated.connect(self.update_ring)
 
     def LogOutBox(self):
 
-        b3 = QCheckBox("Set Logout", self)
-        b3.setChecked(False)
-        b3.move(300,400)
-        b3.resize(200,50)
-        b3.stateChanged.connect(self.logout_state)
+        self._logout_checkbox = QCheckBox("Set Logout", self)
+        self._logout_checkbox.setChecked(False)
+        self._logout_checkbox.move(300,400)
+        self._logout_checkbox.resize(200,50)
+        self._logout_checkbox.stateChanged.connect(self.logout_state)
 
-        log_i = QLineEdit('0', self)
-        log_i.setValidator(QIntValidator())
-        log_i.setMaxLength(3)
-        log_i.setAlignment(Qt.AlignRight)
-        log_i.setGeometry(350,450, 100, 40)
-        log_i.setFont(QFont("Arial", 12))
-        log_i.textChanged.connect(self.logout_time_changed)
+        self._logout_textbox = QLineEdit('0', self)
+        self._logout_textbox.setValidator(QIntValidator())
+        self._logout_textbox.setMaxLength(3)
+        self._logout_textbox.setAlignment(Qt.AlignRight)
+        self._logout_textbox.setGeometry(350,450, 100, 40)
+        self._logout_textbox.setFont(QFont("Arial", 12))
+        self._logout_textbox.textChanged.connect(self.logout_time_changed)
 
-        ring_label = QLabel("Time", self)
-        ring_label.setGeometry(300, 450, 120, 60)
-        ring_label.setWordWrap(True)
+        self._logout_label = QLabel("Time", self)
+        self._logout_label.setGeometry(300, 450, 120, 60)
+        self._logout_label.setWordWrap(True)
 
     def update_food(self):
-        self.food = self.food_box.currentText()
+        self.food = self._food_box.currentText()
 
     def update_ring(self):
-        self.ring_type = self.ring_box.currentText()
+        self.ring_type = self._ring_box.currentText()
 
     def update_spell(self):
-        self.spell = self.spell_box.currentText()
+        self.spell = self._spell_box.currentText()
 
     def update_voc(self):
-        self.voc = self.voc_box.currentText()
+        self.voc = self._voc_box.currentText()
+    
+    def toggle_ui_controls(self, value):
+        self._start_button.setEnabled(value)
+        self._sb_button.setEnabled(value)
+        self._sb_time_textbox.setEnabled(value)
+        self._sb_count_textbox.setEnabled(value)
+        self._voc_box.setEnabled(value)
+        self._ring_box.setEnabled(value)
+        self._ring_checkbox.setEnabled(value)
+        self._ring_count_textbox.setEnabled(value)
+        self._food_box.setEnabled(value)
+        self._spell_box.setEnabled(value)
+
+        self._stop_button.setEnabled(not value)
+
 
     @pyqtSlot()
+    def start_main_thread(self):
+        self._run_main_thread = True
+        self.toggle_ui_controls(False)
+        self._main_thread = threading.Thread(target=self.start)
+        self._main_thread.start()
+
+
+    def stop_main_thread(self):
+        self._run_main_thread = False
+        for x in self._runer_threads.keys():
+            self._runer_threads[x].stop()
+        while self._main_thread.is_alive():
+            time.sleep(.1)
+        self.toggle_ui_controls(True)    
+    
+
     def start(self):
         print("Running Automationd for:")
         print(f"{self.voc} using \'{self.spell}\' eating {self.food}")
         print(f"{'Using' if self.soft_boots else 'not using'} soft boots")
-        FOOD_HOTKEY = KeyCombination('', Key.f1)
-        RUNE_HOTKEY = KeyCombination('', Key.f2)
-        SB_HOTKEY   = KeyCombination(Key.shift, Key.f1)
-        RING_HOTKEY = KeyCombination(Key.shift, Key.f2)
-        LOGOUT_HOTKEY = KeyCombination(Key.ctrl_l, 'l' )
+        FOOD_HOTKEY = kc.KeyCombination(keyboard, '', Key.f1)
+        RUNE_HOTKEY = kc.KeyCombination(keyboard, '', Key.f2)
+        SB_HOTKEY   = kc.KeyCombination(keyboard, Key.shift, Key.f1)
+        RING_HOTKEY = kc.KeyCombination(keyboard, Key.shift, Key.f2)
+        LOGOUT_HOTKEY = kc.KeyCombination(keyboard, Key.ctrl_l, 'l' )
 
         #TODO: Change assignment to function
         mana_regen = VOC_REGEN[self.voc] if not self.soft_boots else VOC_REGEN[self.voc]+4
@@ -309,6 +325,8 @@ class Window(QMainWindow):
         # Startup time
         time.sleep(5)
 
+        # Thread initialization
+        self._runer_threads = dict()
         runer_struct = {'spell' : {'action' : (RUNE_HOTKEY, no_routine), 'duration' : RUNE_DURATION, 'limit' : inf, 'mana_impact' : 0, 'jitter' : 4},
                         'food' :  {'action' : (FOOD_HOTKEY, no_routine), 'duration' : FOOD_DURATION, 'limit' : inf, 'mana_impact' : VOC_REGEN[self.voc], 'jitter' : 3}}
 
@@ -321,42 +339,44 @@ class Window(QMainWindow):
         if self.logout:
             runer_struct['logout'] = {'action' : (LOGOUT_HOTKEY, terminate_program), 'duration' : self.logout_time, 'limit' : 2, 'mana_impact' : 0, 'jitter' : 9} #limit is 2 to ensure it gets clicked at least once
 
-        timers = dict()
         counters = dict()
 
         for x in  runer_struct.keys():
-            timers[x] = 0
+            self._runer_threads[x] = rt.RunerThread(x, 0)
             counters[x] = 0
 
         # Overwrite softbotts initial counter
         if self.soft_boots:
-            timers['sb'] = self.soft_boots_timer *60
+            self._runer_threads['sb'].set_timeout( self.soft_boots_timer *60 )
+            self._runer_threads['sb'].start()
 
         # Overwrite softbotts initial counter
         if self.logout:
-            timers['logout'] = self.logout_time *60
+            self._runer_threads['logout'].set_timeout( self.logout_time *60 )
+            self._runer_threads['logout'].start()
 
-        while(True):
+        while(self._run_main_thread):
             for i in runer_struct.keys():
-                if timers[i] <= 0:
+                if not self._runer_threads[i].is_alive():
                     counters[i] +=1
                     if counters[i] < runer_struct[i]['limit']:
                         take_action(runer_struct[i]['action'])
                         # Add variable deadtime to avoid exact patterns
-                        timers[i] = runer_struct[i]['duration'] + randint(0, runer_struct[i]['jitter'])
+                        self._runer_threads[i] = rt.RunerThread(i, runer_struct[i]['duration'] + randint(0, runer_struct[i]['jitter']))
+                        self._runer_threads[i].start()
                     else:
                         runer_struct[i]['mana_impact'] = 0
-                    mana_regen = 0
-                    for x in  runer_struct.keys():
-                        mana_regen += runer_struct[x]['mana_impact']
-                    runer_struct['spell']['duration'] = MANA_PER_SPELL[self.spell] / mana_regen
                 # Extra white space to clear carries from larger numbers
-                print("%s counter %.2f     " % (i, timers[i]))
-                timers[i] -= 1
+                else:
+                    print("%s counter %.2f     " % (i, self._runer_threads[i].time_left()))
+
+            mana_regen = 0
+            for x in  runer_struct.keys():
+                mana_regen += runer_struct[x]['mana_impact']
+            runer_struct['spell']['duration'] = MANA_PER_SPELL[self.spell] / mana_regen
             for _ in range(len(runer_struct.keys())):
                 sys.stdout.write("\033[F") # Cursor up one line
-            time.sleep(1)
-
+            time.sleep(.5)
 
 def main():
     app = QApplication(sys.argv)
