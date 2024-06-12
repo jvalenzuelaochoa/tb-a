@@ -53,12 +53,13 @@ class Window(QMainWindow):
         self._runer_threads = dict()
         self.logout_time = 0
         self._run_main_thread = False
+        self._display = "Select Settings and press Start!"
 
         # setting title
         self.setWindowTitle("Night's Watch")
 
         # setting geometry
-        self.setGeometry(100, 100, 600, 500)
+        self.setGeometry(100, 100, 600, 800)
 
         # calling method
         self.Vocations()
@@ -73,6 +74,8 @@ class Window(QMainWindow):
         self.LogOutBox()
 
         self.FlowButtons()
+
+        self.DisplayBox()
 
         # showing all the widgets
         self.show()
@@ -94,6 +97,17 @@ class Window(QMainWindow):
 
         # adding action to combo box
         self._voc_box.activated.connect(self.update_voc)
+    
+    def DisplayBox(self):
+        self._display_frame = QFrame(self)
+        self._display_frame.setGeometry(50, 500, 500, 200)
+        self._display_frame.setFrameShape(QFrame.Box)
+        self._display_frame.setFrameShadow(QFrame.Sunken)
+
+        self._display_label = QLabel(self._display, self._display_frame)
+        self._display_label.setAlignment(Qt.AlignTop)
+        self._display_label.setGeometry(0, 0, 500, 200)
+        self._display_label.setWordWrap(True)
  
     def SoftBoots(self):
         self._sb_button = QCheckBox("Soft Boots", self)
@@ -304,6 +318,11 @@ class Window(QMainWindow):
         while self._main_thread.is_alive():
             time.sleep(.1)
         self.toggle_ui_controls(True)    
+        self._display = "Select Settings and press Start!"
+        self.update_display()
+
+    def update_display(self):
+        self._display_label.setText(self._display)
     
 
     def start(self):
@@ -345,21 +364,25 @@ class Window(QMainWindow):
             self._runer_threads[x] = rt.RunerThread(x, 0)
             counters[x] = 0
 
-        # Overwrite softbotts initial counter
+        # Overwrite softboots initial counter
         if self.soft_boots:
             self._runer_threads['sb'].set_timeout( self.soft_boots_timer *60 )
             self._runer_threads['sb'].start()
+            counters['sb'] = 1
 
-        # Overwrite softbotts initial counter
+        # Overwrite logout initial counter
         if self.logout:
             self._runer_threads['logout'].set_timeout( self.logout_time *60 )
             self._runer_threads['logout'].start()
+            counters['logout'] = 1
 
         while(self._run_main_thread):
+            display_log = []
             for i in runer_struct.keys():
+                # Check if thread is finished
                 if not self._runer_threads[i].is_alive():
                     counters[i] +=1
-                    if counters[i] < runer_struct[i]['limit']:
+                    if counters[i] <= runer_struct[i]['limit']:
                         take_action(runer_struct[i]['action'])
                         # Add variable deadtime to avoid exact patterns
                         self._runer_threads[i] = rt.RunerThread(i, runer_struct[i]['duration'] + randint(0, runer_struct[i]['jitter']))
@@ -368,14 +391,16 @@ class Window(QMainWindow):
                         runer_struct[i]['mana_impact'] = 0
                 # Extra white space to clear carries from larger numbers
                 else:
-                    print("%s counter %.2f     " % (i, self._runer_threads[i].time_left()))
+                    display_log.append(f"{runer_struct[i]['limit'] - counters[i] + 1} {i} left. Timer: {self._runer_threads[i].time_left()} ")
 
+            # Recalculate duration of spells based on current mana regen
             mana_regen = 0
             for x in  runer_struct.keys():
                 mana_regen += runer_struct[x]['mana_impact']
             runer_struct['spell']['duration'] = MANA_PER_SPELL[self.spell] / mana_regen
-            for _ in range(len(runer_struct.keys())):
-                sys.stdout.write("\033[F") # Cursor up one line
+
+            self._display = '\n'.join(display_log)
+            self.update_display()
             time.sleep(.5)
 
 def main():
